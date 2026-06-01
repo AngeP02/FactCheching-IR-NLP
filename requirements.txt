@@ -1,0 +1,12 @@
+datasets
+nltk
+spacy
+rank_bm25
+scikit-learn
+matplotlib
+openai
+streamlit
+wikipedia-api
+pandas
+tqdm
+seaborn
