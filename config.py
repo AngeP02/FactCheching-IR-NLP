@@ -64,3 +64,5 @@ TOKEN_MASSIMI = 50
 SORGENTE_CORPUS     = "fever"   # oppure "web"
 PERCORSO_WIKI_PAGES = "dati/grezzi/wiki_pages/"
 PERCORSO_INDICE     = "dati/elaborati/indice.pkl"
+
+ESPANSIONE_ATTIVA = False
