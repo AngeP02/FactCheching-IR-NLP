@@ -13,3 +13,5 @@ seaborn
 numpy~=2.4.6
 python-dotenv~=1.2.2
 ipywidgets
+
+requests~=2.34.2

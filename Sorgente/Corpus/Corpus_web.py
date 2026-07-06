@@ -46,7 +46,7 @@ Utilizzo:
 
 from datetime import datetime
 import wikipediaapi
-
+import requests
 from Sorgente.Corpus.corpus_base       import CorpusBase
 from Sorgente.Preprocessing.preprocesing import Preprocessore
 
@@ -72,22 +72,18 @@ class CorpusWeb(CorpusBase):
     """
 
     def __init__(
-        self,
-        preprocessore: Preprocessore,
-        max_pagine:    int = 5
+            self,
+            preprocessore: Preprocessore,
+            max_pagine: int = 5
     ):
-        """
-        Inizializza il corpus web.
-
-        Args:
-            preprocessore: istanza del Preprocessore
-            max_pagine:    numero massimo di pagine Wikipedia da recuperare
-        """
         self._preprocessore = preprocessore
-        self._max_pagine    = max_pagine
-        self._wiki          = wikipediaapi.Wikipedia(
-            language   = 'en',
-            user_agent = 'FactChecker-ProgettoEsame/1.0'
+        self._max_pagine = max_pagine
+        # 1. Salviamo lo user-agent in una nostra variabile
+        self._user_agent = 'FactChecker-ProgettoEsame/1.0 (studente@unical.it)'
+
+        self._wiki = wikipediaapi.Wikipedia(
+            language='EN',
+            user_agent=self._user_agent  # 2. Lo passiamo alla libreria
         )
 
     # ── Implementazione interfaccia CorpusBase ────────────────────
@@ -171,41 +167,52 @@ class CorpusWeb(CorpusBase):
     # ── Metodi privati ────────────────────────────────────────────
 
     def _cerca_titoli(self, query: str) -> list[str]:
-        """
-        Cerca i titoli delle pagine Wikipedia più rilevanti.
-
-        Estrae le parole chiave dalla query (senza stopwords),
-        le usa come termine di ricerca Wikipedia e restituisce
-        i titoli delle pagine trovate.
-
-        Usa le parole originali (non stemmiate) perché Wikipedia
-        si aspetta termini leggibili, non stem.
-
-        Args:
-            query: testo della query
-
-        Returns:
-            Lista di titoli di pagine Wikipedia
-        """
-        # Usa le parole originali dalla query, non gli stem
-        # Per la ricerca Wikipedia serve il testo leggibile
-        import re
-        from nltk.corpus import stopwords
-
-        stop = set(stopwords.words('english'))
-        parole = re.findall(r'\b[a-zA-Z]{3,}\b', query)
-        parole_chiave = [p for p in parole if p.lower() not in stop]
-
-        # Prova con la query completa prima, poi con parole chiave
-        termini_ricerca = [query] + parole_chiave[:3]
         titoli = []
 
-        for termine in termini_ricerca:
-            pagina = self._wiki.page(termine)
-            if pagina.exists() and pagina.title not in titoli:
-                titoli.append(pagina.title)
-            if len(titoli) >= self._max_pagine:
-                break
+        # 1. Chiamiamo il VERO motore di ricerca di Wikipedia tramite API REST
+        url = f"https://{self._wiki.language}.wikipedia.org/w/api.php"
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "search",
+            "srsearch": query,
+            "utf8": 1,
+            "srlimit": self._max_pagine
+        }
+        headers = {"User-Agent": self._user_agent}
+
+        try:
+            risposta = requests.get(url, params=params, headers=headers)
+            dati = risposta.json()
+            if "query" in dati and "search" in dati["query"]:
+                for risultato in dati["query"]["search"]:
+                    titoli.append(risultato["title"])
+        except Exception as e:
+            print(f"⚠️ Errore API di ricerca: {e}")
+
+        # 2. Fallback: se la frase intera non trova nulla, cerchiamo solo le parole chiave
+        if not titoli:
+            import re
+            from nltk.corpus import stopwords
+
+            # Adatta le stopwords alla lingua scelta
+            lingua_stop = 'italian' if self._wiki.language == 'it' else 'english'
+            stop = set(stopwords.words(lingua_stop))
+
+            parole = re.findall(r'\b[a-zA-Z]{3,}\b', query)
+            parole_chiave = [p for p in parole if p.lower() not in stop]
+
+            if parole_chiave:
+                query_ridotta = " ".join(parole_chiave[:4])  # Prendi le prime 4 parole chiave
+                params["srsearch"] = query_ridotta
+                try:
+                    risposta = requests.get(url, params=params, headers=headers)
+                    dati = risposta.json()
+                    if "query" in dati and "search" in dati["query"]:
+                        for risultato in dati["query"]["search"]:
+                            titoli.append(risultato["title"])
+                except Exception as e:
+                    print(f"⚠️ Errore API di ricerca fallback: {e}")
 
         return titoli
 

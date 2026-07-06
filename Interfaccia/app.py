@@ -1,208 +1,215 @@
 import os
 import sys
 
+# Configurazione path
 cartella_interfaccia = os.path.dirname(os.path.abspath(__file__))
-cartella_progetto    = os.path.dirname(cartella_interfaccia)
+cartella_progetto = os.path.dirname(cartella_interfaccia)
 if cartella_progetto not in sys.path:
     sys.path.insert(0, cartella_progetto)
 
 import streamlit as st
 from dotenv import load_dotenv
-
 import config as cfg
 from Sorgente.Pipeline import Pipeline
 
 load_dotenv()
 
 st.set_page_config(
-    page_title='Fact Checker',
-    page_icon='🔍',
+    page_title='Fact Checker AI',
+    page_icon='🤖',
     layout='wide'
 )
+
+
+# --- INIZIALIZZAZIONE E CACHE ---
 
 @st.cache_resource
 def carica_pipeline(api_key: str) -> Pipeline:
     return Pipeline(api_key=api_key)
 
-def colore_verdetto(verdetto: str) -> str:
-    return {
-        'SUPPORTS': '#2ecc71',
-        'REFUTES': '#e74c3c',
-        'NOT ENOUGH INFO': '#f39c12'
-    }.get(verdetto, '#95a5a6')
+
+def init_session_state():
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "last_result" not in st.session_state:
+        st.session_state.last_result = None
+    if "last_stats" not in st.session_state:
+        st.session_state.last_stats = None
 
 
-def icona_verdetto(verdetto: str) -> str:
-    return {
-        'SUPPORTS': '✅',
-        'REFUTES': '❌',
-        'NOT ENOUGH INFO': '⚠️'
-    }.get(verdetto, '❓')
+def get_ui_elements(verdetto: str) -> tuple[str, str]:
+    mappa = {
+        'SUPPORTS': ('#2ecc71', '✅'),
+        'REFUTES': ('#e74c3c', '❌'),
+        'NOT ENOUGH INFO': ('#f39c12', '⚠️')
+    }
+    return mappa.get(verdetto, ('#95a5a6', '❓'))
 
-def main():
-    st.title('🔍 Fact Checker')
+
+# --- RENDER DELLE PAGINE ---
+
+def pagina_chatbot(pipeline: Pipeline):
+    st.title('🤖 Fact Checker AI')
+    st.caption("Chiedimi di verificare un'affermazione. Cercherò le prove e ti darò un verdetto.")
+
+    # Mostra la cronologia della chat
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"], unsafe_allow_html=True)
+
+            # CORREZIONE 2: Ora disegna l'expander solo se ci sono effettivamente fonti salvate
+            if msg["role"] == "assistant" and msg.get("sources"):
+                with st.expander("📚 Mostra le fonti analizzate"):
+                    for i, doc in enumerate(msg["sources"], 1):
+                        st.markdown(f"**{i}. {doc['titolo']}**")
+                        st.info(doc['evidenza'])
+
+    # Input utente
+    if prompt := st.chat_input("Es: L'attuale presidente della Repubblica Italiana è Sergio Mattarella"):
+        # Mostra messaggio utente
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Risposta assistente
+        with st.chat_message("assistant"):
+            with st.spinner("Sto cercando le evidenze e ragionando..."):
+                try:
+                    stats = None
+                    if cfg.ESPANSIONE_ATTIVA and cfg.SORGENTE_CORPUS == 'fever':
+                        try:
+                            stats = pipeline._espansore.statistiche_espansione(prompt)
+                        except Exception:
+                            pass
+
+                    # Esecuzione pipeline
+                    risultato = pipeline.verifica(prompt)
+
+                    # Salva in sessione per la pagina sviluppatori
+                    st.session_state.last_result = risultato
+                    st.session_state.last_stats = stats
+
+                    verdetto = risultato['verdetto']
+                    confidenza = risultato['confidenza']
+                    colore, icona = get_ui_elements(verdetto)
+
+                    risposta_html = (
+                        f"Il mio verdetto è: <strong style='color:{colore}; font-size:1.2em'>"
+                        f"{icona} {verdetto}</strong> (Confidenza: {confidenza:.1f}%)"
+                    )
+
+                    st.markdown(risposta_html, unsafe_allow_html=True)
+
+                    # CORREZIONE 1: La chiave giusta restituita dalla tua pipeline è 'documenti', non 'dettagli'
+                    documenti = risultato.get('documenti', [])
+
+                    if documenti:
+                        with st.expander("📚 Mostra le fonti analizzate"):
+                            for i, doc in enumerate(documenti, 1):
+                                st.markdown(f"**{i}. {doc['titolo']}**")
+                                st.info(doc['evidenza'])
+                    else:
+                        st.warning("Non ho trovato documenti pertinenti per questa ricerca.")
+
+                    # Salva messaggio in cronologia
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": risposta_html,
+                        "sources": documenti
+                    })
+
+                except Exception as e:
+                    st.error(f'Ops! Si è verificato un errore: {e}')
+
+
+def pagina_sviluppatori():
+    st.title('⚙️ Dietro le Quinte (Developer Mode)')
     st.markdown(
-        'Sistema automatico di verifica delle affermazioni '
-        'basato su **BM25 esteso** + **NLI con LLM**.'
-    )
+        "In questa pagina puoi ispezionare i punteggi **Information Retrieval (IR)** e le logiche **Natural Language Processing (NLP)** dell'ultima query elaborata.")
     st.divider()
 
-    with st.sidebar:
-        st.header('⚙️ Configurazione')
-        api_key = os.getenv('OPENAI_API_KEY')
-        st.subheader('Sorgente')
-        sorgente = st.radio(
-            'Corpus da usare',
-            options=['fever', 'web'],
-            format_func=lambda x: (
-                'FEVER (corpus fisso)' if x == 'fever' else 'Wikipedia live'
-            ),
-            help=(
-                'FEVER: valutazione rigorosa su corpus pre-costruito.\n'
-                'Web: risponde a qualsiasi domanda in tempo reale.'
-            )
-        )
-        cfg.SORGENTE_CORPUS = sorgente
-        st.subheader('Parametri')
-        k_documenti = st.slider(
-            'Documenti da recuperare (K)',
-            min_value=1, max_value=10,
-            value=cfg.DOCUMENTI_DA_RECUPERARE,
-            help='Quanti documenti usare per la classificazione NLI'
-        )
-        cfg.DOCUMENTI_DA_RECUPERARE = k_documenti
-        usa_espansione = st.toggle(
-            'Espansione query (WordNet)',
-            value=cfg.ESPANSIONE_ATTIVA,
-            help=(
-                'Aggiunge sinonimi WordNet ai termini della query.\n'
-                'Impatto marginale su FEVER — utile per query generali.'
-            )
-        )
-        cfg.ESPANSIONE_ATTIVA = usa_espansione
+    risultato = st.session_state.last_result
 
-        st.divider()
-        st.markdown('**Parametri BM25:**')
-        st.caption(f'k1 = {cfg.K1} · b = {cfg.B}')
-        st.caption(f'α (authority) = {cfg.PESO_AUTHORITY}')
-        st.caption(f'β (freshness) = {cfg.PESO_FRESHNESS}')
-        st.caption(f'Modello LLM: {cfg.MODELLO_LLM}')
-    if not api_key:
-        st.info('Imposta la variabile d\'ambiente OPENAI_API_KEY per iniziare.')
+    if not risultato:
+        st.info("Esegui prima una ricerca nella pagina Chatbot per vedere i dettagli qui.")
         return
-    try:
-        with st.spinner('Caricamento sistema...'):
-            pipeline = carica_pipeline(api_key)
-    except FileNotFoundError as e:
-        st.error(
-            f'File non trovato: {e}\n\n'
-            'Esegui prima i notebook di setup (00 e 02).'
-        )
-        return
-    st.subheader('📝 Inserisci un\'affermazione da verificare')
 
-    esempi = [
-        'Nikolaj Coster-Waldau worked with the Fox Broadcasting Company.',
-        'The Eiffel Tower is located in Berlin.',
-        'Barack Obama was born in Hawaii.',
-        'Cellulari vietati nelle scuole italiane.',
-    ]
-    esempio_scelto = st.selectbox(
-        'Oppure scegli un esempio:',
-        [''] + esempi,
-        format_func=lambda x: x if x else '— seleziona un esempio —'
-    )
+    col1, col2 = st.columns(2)
 
-    claim_input = st.text_area(
-        'Affermazione:',
-        value=esempio_scelto,
-        height=80,
-        placeholder='Scrivi qui l\'affermazione da verificare...'
-    )
-
-    col1, col2 = st.columns([1, 5])
     with col1:
-        verifica_btn = st.button('🔍 Verifica', type='primary', use_container_width=True)
-    with col2:
-        if usa_espansione and claim_input and sorgente == 'fever':
-            try:
-                stats = pipeline._espansore.statistiche_espansione(claim_input)
-                if stats['n_aggiunti'] > 0:
-                    st.caption(
-                        f"Espansione: +{stats['n_aggiunti']} sinonimi "
-                        f"→ {stats['sinonimi_aggiunti']}"
-                    )
-            except Exception:
-                pass
-
-    if verifica_btn and claim_input.strip():
-        with st.spinner('Verifica in corso...'):
-            try:
-                risultato = pipeline.verifica(claim_input.strip())
-            except Exception as e:
-                st.error(f'Errore durante la verifica: {e}')
-                return
-
-        verdetto   = risultato['verdetto']
-        confidenza = risultato['confidenza']
-        colore     = colore_verdetto(verdetto)
-        icona      = icona_verdetto(verdetto)
-
-        st.divider()
-        st.subheader('📊 Risultato')
-
-        # Verdetto principale
-        st.markdown(
-            f'<div style="background:{colore}22; border-left:5px solid {colore}; '
-            f'padding:16px; border-radius:6px; margin-bottom:16px;">'
-            f'<h2 style="color:{colore}; margin:0;">{icona} {verdetto}</h2>'
-            f'<p style="margin:4px 0 0 0; color:gray;">Confidenza: {confidenza:.1f}%</p>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-        # Token query (con espansione se attiva)
-        token_query = risultato.get('token_query', [])
-        if token_query and usa_espansione:
-            st.caption(f'Token query usati: {" · ".join(token_query)}')
-
-        # Pesi per label
+        st.subheader("🔍 NLP: Dettagli Classificazione")
         pesi = risultato.get('pesi_label', {})
         if pesi:
-            col_s, col_r, col_n = st.columns(3)
-            with col_s:
-                st.metric('SUPPORTS',        f"{pesi.get('SUPPORTS', 0):.2f}")
-            with col_r:
-                st.metric('REFUTES',         f"{pesi.get('REFUTES', 0):.2f}")
-            with col_n:
-                st.metric('NOT ENOUGH INFO', f"{pesi.get('NOT ENOUGH INFO', 0):.2f}")
+            st.write("**Pesi aggregati pesati dal BM25:**")
+            peso_tot = sum(pesi.values()) or 1
+            st.progress(pesi.get('SUPPORTS', 0) / peso_tot, text=f"SUPPORTS ({pesi.get('SUPPORTS', 0):.2f})")
+            st.progress(pesi.get('REFUTES', 0) / peso_tot, text=f"REFUTES ({pesi.get('REFUTES', 0):.2f})")
+            st.progress(pesi.get('NOT ENOUGH INFO', 0) / peso_tot,
+                        text=f"NOT ENOUGH INFO ({pesi.get('NOT ENOUGH INFO', 0):.2f})")
 
-        # Documenti analizzati
-        st.divider()
-        st.subheader('📄 Documenti analizzati')
+        stats = st.session_state.last_stats
+        if stats and stats['n_aggiunti'] > 0:
+            st.write("**Espansione Query (WordNet):**")
+            st.code(f"Originali: {stats['token_originali']}\nEspansi: {stats['sinonimi_aggiunti']}")
 
+    with col2:
+        st.subheader("📊 IR: Ranking e Punteggi BM25")
+        # CORREZIONE: Aggiornato anche qui a 'documenti'
         documenti = risultato.get('documenti', [])
         if documenti:
-            for i, doc in enumerate(documenti, 1):
-                col_doc   = colore_verdetto(doc['verdetto'])
-                icona_doc = icona_verdetto(doc['verdetto'])
-
-                with st.expander(
-                    f"{i}. {doc['titolo']} — {icona_doc} {doc['verdetto']} "
-                    f"(score: {doc['punteggio']:.3f})"
-                ):
-                    st.markdown(f"**Verdetto LLM:** {icona_doc} {doc['verdetto']}")
-                    st.markdown(f"**Punteggio BM25 esteso:** {doc['punteggio']:.4f}")
-                    st.markdown('**Testo evidenza usato:**')
-                    st.info(
-                        doc['evidenza'] if doc['evidenza']
-                        else '*(nessun testo disponibile)*'
-                    )
+            for doc in documenti:
+                colore, icona = get_ui_elements(doc['verdetto'])
+                st.markdown(f"**{doc['titolo']}**")
+                st.caption(
+                    f"Score BM25 Esteso: `{doc['punteggio']:.4f}` | Verdetto Parziale: {icona} {doc['verdetto']}")
+                st.divider()
         else:
-            st.warning('Nessun documento recuperato per questa query.')
+            st.write("Nessun documento recuperato.")
 
-    elif verifica_btn and not claim_input.strip():
-        st.warning('Inserisci un\'affermazione prima di premere Verifica.')
+
+# --- MAIN APP ---
+
+def main():
+    init_session_state()
+    api_key = os.getenv('OPENAI_API_KEY')
+
+    if not api_key:
+        st.error("⚠️ Nessuna API Key trovata. Imposta OPENAI_API_KEY nel file .env")
+        return
+
+    try:
+        pipeline = carica_pipeline(api_key)
+    except FileNotFoundError as e:
+        st.error(f'File non trovato: {e}\n\nEsegui prima i notebook di setup (00 e 02).')
+        return
+
+    with st.sidebar:
+        st.header('🧭 Navigazione')
+        pagina_corrente = st.radio("Seleziona vista:", ["💬 Chatbot", "⚙️ Sviluppatori"], label_visibility="collapsed")
+
+        st.divider()
+        st.header('⚙️ Configurazione')
+        sorgente = st.radio('Sorgente Dati', ['fever', 'web'],
+                            format_func=lambda x: '📚 FEVER (Locale)' if x == 'fever' else '🌐 Wikipedia Live')
+        cfg.SORGENTE_CORPUS = sorgente
+
+        cfg.DOCUMENTI_DA_RECUPERARE = st.slider('Top-K Documenti (IR)', 1, 10, cfg.DOCUMENTI_DA_RECUPERARE)
+        cfg.ESPANSIONE_ATTIVA = st.toggle('Attiva WordNet', value=cfg.ESPANSIONE_ATTIVA)
+
+        st.divider()
+        st.caption(f"LLM: {cfg.MODELLO_LLM}")
+
+        # Premere questo bottone svuota la cronologia e riporta a zero l'app
+        if st.button("🗑️ Svuota Chat"):
+            st.session_state.messages = []
+            st.session_state.last_result = None
+            st.session_state.last_stats = None
+            st.rerun()
+
+    if pagina_corrente == "💬 Chatbot":
+        pagina_chatbot(pipeline)
+    else:
+        pagina_sviluppatori()
 
 
 if __name__ == '__main__':
