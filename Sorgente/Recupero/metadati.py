@@ -3,7 +3,6 @@ from datetime import datetime
 
 DATA_RIFERIMENTO = datetime(2004, 1, 1)
 
-
 class GestoreMetadati:
     def __init__(self, corpus_arricchito: dict):
         self._authority_scores, self._freshness_scores = \
@@ -31,12 +30,14 @@ class GestoreMetadati:
             [corpus_arricchito[t]['numero_link_entrata'] for t in titoli],
             dtype=float
         )
+        link_logaritmici = np.log1p(link_grezzi)
+
         giorni_grezzi = np.array(
             [self._timestamp_in_giorni(corpus_arricchito[t]['timestamp'])
              for t in titoli],
             dtype=float
         )
-        authority_norm = self._normalizza_min_max(link_grezzi)
+        authority_norm = self._normalizza_min_max(link_logaritmici)
         freshness_norm = self._normalizza_min_max(giorni_grezzi)
         authority_scores = dict(zip(titoli, authority_norm.tolist()))
         freshness_scores = dict(zip(titoli, freshness_norm.tolist()))

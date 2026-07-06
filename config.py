@@ -84,7 +84,7 @@ TOKEN_MASSIMI = 10
 
 # Numero massimo di caratteri del testo evidenza inviato all'LLM
 # Limita i costi API mantenendo il contesto sufficiente
-MAX_CARATTERI_EVIDENZA = 1000
+MAX_CARATTERI_EVIDENZA = 3000
 
 # ── Label FEVER ───────────────────────────────────────────────────
 # Nomi esatti delle label nel dataset FEVER v1.0
