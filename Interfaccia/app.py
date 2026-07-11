@@ -100,6 +100,11 @@ def pagina_chatbot(pipeline: Pipeline):
 
                     st.markdown(risposta_html, unsafe_allow_html=True)
 
+                    # Spiegazione generata dal LLM (componente RAG generativa)
+                    spiegazione = risultato.get('spiegazione', '')
+                    if spiegazione:
+                        st.markdown(f"_{spiegazione}_")
+
                     # CORREZIONE 1: La chiave giusta restituita dalla tua pipeline è 'documenti', non 'dettagli'
                     documenti = risultato.get('documenti', [])
 
@@ -114,7 +119,7 @@ def pagina_chatbot(pipeline: Pipeline):
                     # Salva messaggio in cronologia
                     st.session_state.messages.append({
                         "role": "assistant",
-                        "content": risposta_html,
+                        "content": risposta_html + (f"\n\n_{spiegazione}_" if spiegazione else ""),
                         "sources": documenti
                     })
 
@@ -146,6 +151,12 @@ def pagina_sviluppatori():
             st.progress(pesi.get('REFUTES', 0) / peso_tot, text=f"REFUTES ({pesi.get('REFUTES', 0):.2f})")
             st.progress(pesi.get('NOT ENOUGH INFO', 0) / peso_tot,
                         text=f"NOT ENOUGH INFO ({pesi.get('NOT ENOUGH INFO', 0):.2f})")
+
+        # Spiegazione generativa — componente RAG
+        spiegazione = risultato.get('spiegazione', '')
+        if spiegazione:
+            st.write("**📝 Spiegazione generata dal LLM:**")
+            st.info(spiegazione)
 
         stats = st.session_state.last_stats
         if stats and stats['n_aggiunti'] > 0:

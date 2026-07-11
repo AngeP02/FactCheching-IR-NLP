@@ -173,6 +173,45 @@ class ClassificatoreNLI:
         verdetto_finale = max(pesi_corretti, key=lambda k: pesi_corretti[k])
         return verdetto_finale, pesi
 
+    def _genera_spiegazione(
+            self,
+            claim: str,
+            verdetto: str,
+            evidenze: list[str]
+    ) -> str:
+        testo_evidenze = '\n'.join(
+            f"- {ev[:300]}" for ev in evidenze[:3] if ev
+        )
+        if not testo_evidenze:
+            return ''
+
+        istruzione = {
+            'SUPPORTS': 'explain what specific information in the evidence confirms the claim.',
+            'REFUTES': 'explain what specific information in the evidence contradicts the claim.',
+            'NOT ENOUGH INFO': 'explain why the evidence does not contain enough information to verify the claim.'
+        }.get(verdetto, 'explain the verdict.')
+
+        prompt = f"""You are a fact-checking assistant. Based ONLY on the evidence below, {istruzione}
+
+    CLAIM: {claim}
+    VERDICT: {verdetto}
+
+    EVIDENCE:
+    {testo_evidenze}
+
+    Write 1-2 clear sentences. Be specific about what the evidence says or does not say. Do not use external knowledge."""
+
+        try:
+            risposta = self._client.chat.completions.create(
+                model=self._modello,
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.3,
+                max_tokens=100
+            )
+            return risposta.choices[0].message.content.strip()
+        except Exception:
+            return ''
+
     def verifica(
             self,
             claim: str,
@@ -226,10 +265,14 @@ class ClassificatoreNLI:
         confidenza = (pesi[verdetto_finale] / peso_totale * 100
                       if peso_totale > 0 else 0.0)
 
+        evidenze_testo = [d['evidenza'] for d in dettagli if d['evidenza']]
+        spiegazione = self._genera_spiegazione(claim, verdetto_finale, evidenze_testo)
+
         return {
             'claim': claim,
             'verdetto': verdetto_finale,
             'pesi_label': {k: round(v, 4) for k, v in pesi.items()},
             'confidenza': round(confidenza, 1),
+            'spiegazione': spiegazione,
             'dettagli': dettagli
         }

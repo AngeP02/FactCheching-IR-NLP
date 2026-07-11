@@ -97,6 +97,7 @@ class Pipeline:
             'confidenza':  risultato_nli['confidenza'],
             'pesi_label':  risultato_nli['pesi_label'],
             'documenti':   risultato_nli['dettagli'],
+            'spiegazione': risultato_nli.get('spiegazione', ''),
             'token_query': token_query
         }
 
