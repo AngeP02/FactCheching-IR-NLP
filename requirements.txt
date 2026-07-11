@@ -15,3 +15,5 @@ python-dotenv~=1.2.2
 ipywidgets
 
 requests~=2.34.2
+sentence_transformers
+torchvision

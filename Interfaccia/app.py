@@ -171,8 +171,19 @@ def pagina_sviluppatori():
             for doc in documenti:
                 colore, icona = get_ui_elements(doc['verdetto'])
                 st.markdown(f"**{doc['titolo']}**")
-                st.caption(
-                    f"Score BM25 Esteso: `{doc['punteggio']:.4f}` | Verdetto Parziale: {icona} {doc['verdetto']}")
+
+                # Mostra entrambi gli score se il reranking è attivo
+                if 'score_reranking' in doc:
+                    st.caption(
+                        f"BM25: `{doc['punteggio']:.4f}` | "
+                        f"Re-ranking: `{doc['score_reranking']:.4f}` | "
+                        f"Verdetto: {icona} {doc['verdetto']}"
+                    )
+                else:
+                    st.caption(
+                        f"Score BM25: `{doc['punteggio']:.4f}` | "
+                        f"Verdetto: {icona} {doc['verdetto']}"
+                    )
                 st.divider()
         else:
             st.write("Nessun documento recuperato.")
@@ -221,6 +232,113 @@ def main():
         pagina_chatbot(pipeline)
     else:
         pagina_sviluppatori()
+        # ──────────────────────────────────────────────────────────────────────
+        # VALUTAZIONE GLOBALE DEL SISTEMA (BENCHMARK DATASET)
+        # ──────────────────────────────────────────────────────────────────────
+        st.divider()
+        st.subheader("📊 Valutazione Globale del Sistema")
+        st.write(
+            "Esegui un test controllato su un campione del dataset FEVER per calcolare parametri come MAP, Recall e Accuratezza NLI.")
+
+        # Input interattivi per lo sviluppatore
+        campione_size = st.number_input("Numero di claim da testare nel benchmark", min_value=2, max_value=200,
+                                        value=10)
+        path_fever_test = st.text_input("Percorso del file Ground Truth (JSONL)", value="fever_dev_sample.jsonl")
+
+        if st.button("🚀 Avvia Benchmark su Dataset"):
+            if not os.path.exists(path_fever_test):
+                st.error(f"❌ File non trovato al percorso specificato: '{path_fever_test}'. Verifica la cartella.")
+            else:
+                import json
+                with st.spinner(
+                        "Valutazione in corso... Il sistema sta elaborando i claim e confrontando i risultati con il Ground Truth."):
+
+                    # 1. Caricamento del campione dal file JSONL di FEVER
+                    dati_test = []
+                    with open(path_fever_test, 'r', encoding='utf-8') as f:
+                        for i, linea in enumerate(f):
+                            if i >= campione_size:
+                                break
+                            item = json.loads(linea)
+
+                            # Estraiamo gli ID dei documenti rilevanti reali indicati nel dataset FEVER
+                            true_docs = []
+                            if 'evidence' in item:
+                                for annotation in item['evidence']:
+                                    for ev in annotation:
+                                        if len(ev) > 2 and ev[2] is not None:
+                                            true_docs.append(ev[2])
+
+                            dati_test.append({
+                                'claim': item.get('claim', ''),
+                                'true_label': item.get('label', 'NOT ENOUGH INFO'),
+                                'true_doc_ids': list(set(true_docs))  # Rimuove duplicati di annotazione
+                            })
+
+                    lista_risultati_ir = []
+                    label_vere = []
+                    label_predette = []
+
+                    # Barra di avanzamento visiva su Streamlit
+                    progress_bar = st.progress(0)
+
+                    # 2. Loop di predizione sui claim di test
+                    for idx, item in enumerate(dati_test):
+                        claim = item['claim']
+
+                        # Eseguiamo la pipeline. Il metodo verifica aggiornerà st.session_state.last_result
+                        # o restituirà il dizionario a seconda di come è mappato in Pipeline.py
+                        pipeline.verifica(claim)
+                        risultato = st.session_state.last_result
+
+                        if risultato:
+                            # Estraiamo gli ID dei documenti recuperati dal nostro sistema (BM25 + Reranker)
+                            documenti_recuperati = [doc['id_doc'] for doc in risultato.get('dettagli', [])]
+
+                            # Accumulo dati per metriche IR
+                            lista_risultati_ir.append({
+                                'recuperati': documenti_recuperati,
+                                'rilevanti': item['true_doc_ids']
+                            })
+
+                            # Accumulo dati per metriche NLP
+                            label_vere.append(item['true_label'])
+                            label_predette.append(risultato.get('verdetto', 'NOT ENOUGH INFO'))
+
+                        progress_bar.progress((idx + 1) / len(dati_test))
+
+                    # 3. Calcolo effettivo mediante i tuoi moduli di valutazione
+                    try:
+                        from Sorgente.Valutazione.metriche_ir import MetricheIR
+                        calcolatore_ir = MetricheIR()
+                        report_ir = calcolatore_ir.valuta_sistema(lista_risultati_ir, k_valori=[1, 3, 5])
+
+                        from Sorgente.Valutazione.metriche_nlp import MetricheNLP
+                        calcolatore_nlp = MetricheNLP()
+                        report_nlp = calcolatore_nlp.valuta_sistema(label_vere, label_predette)
+
+                        # 4. Rendering delle metriche nell'interfaccia Streamlit
+                        st.success("✅ Valutazione completata!")
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("### 🔍 Performance del Modulo IR")
+                            st.metric("Mean Average Precision (MAP)", f"{report_ir.get('MAP', 0.0):.4f}")
+                            st.metric("Recall@3", f"{report_ir.get('R@3', 0.0):.4f}")
+                            st.metric("Precision@3", f"{report_ir.get('P@3', 0.0):.4f}")
+
+                        with col2:
+                            st.markdown("### 🧠 Performance della Classificazione NLI")
+                            st.metric("Accuracy Globale", f"{report_nlp.get('accuracy', 0.0):.4f}")
+                            st.metric("F1 Macro", f"{report_nlp.get('f1_macro', 0.0):.4f}")
+                            st.metric("Kappa di Cohen", f"{report_nlp.get('kappa_cohen', 0.0):.4f}")
+
+                        # Visualizzazione della tabella dettagliata per singola classe
+                        st.write("#### 📊 Breakdown per Classe (Dettaglio NLP)")
+                        st.dataframe(report_nlp.get('per_classe'))
+
+                    except Exception as e:
+                        st.error(f"Si è verificato un errore durante il calcolo delle metriche: {e}")
 
 
 if __name__ == '__main__':

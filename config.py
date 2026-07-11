@@ -74,6 +74,15 @@ MAX_SINONIMI_ESPANSIONE = 3
 # Modello OpenAI usato per la classificazione NLI
 MODELLO_LLM = 'gpt-4o-mini'
 
+# ── Re-ranking neurale ────────────────────────────────────────────
+# True → usa cross-encoder dopo BM25 per riordinare i documenti
+# False → usa solo BM25 (più veloce, comportamento originale)
+RERANKING_ATTIVO = True
+
+# Quanti candidati BM25 passare al reranker
+# Deve essere > DOCUMENTI_DA_RECUPERARE per dare margine al reranker
+CANDIDATI_RERANKING = 20
+
 # Temperatura 0 → output deterministico e riproducibile
 # Fondamentale per la valutazione scientifica
 TEMPERATURA = 0.0

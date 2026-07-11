@@ -1,3 +1,5 @@
+import math
+
 from openai import OpenAI
 from Sorgente.Classificazione.costruttore_prompt import CostruttorePrompt
 import config as cfg
@@ -251,14 +253,28 @@ class ClassificatoreNLI:
 
             label = self._classifica_coppia(claim, evidenza)
             verdetti.append(label)
-            punteggi.append(risultato['punteggio_finale'])
-            dettagli.append({
+            if 'score_reranking' in risultato:
+                # Applica la sigmoide per portare il logit in un range 0-1
+                score_norm = 1 / (1 + math.exp(-risultato['score_reranking']))
+                # Moltiplica per allinearlo a una scala comparabile
+                punteggi.append(score_norm * 100)
+            else:
+                punteggi.append(risultato['punteggio_finale'])
+
+            # Crea il dizionario base
+            doc_dettaglio = {
                 'id_doc': id_doc,
                 'titolo': risultato['titolo'],
                 'punteggio': risultato['punteggio_finale'],
                 'verdetto': label,
                 'evidenza': evidenza[:500]
-            })
+            }
+
+            # Se il reranking è attivo, recupera e propaga la chiave
+            if 'score_reranking' in risultato:
+                doc_dettaglio['score_reranking'] = risultato['score_reranking']
+
+            dettagli.append(doc_dettaglio)
 
         verdetto_finale, pesi = self._aggrega_verdetti(verdetti, punteggi)
         peso_totale = sum(pesi.values())

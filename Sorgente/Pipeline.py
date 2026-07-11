@@ -8,6 +8,7 @@ from Sorgente.Indicizzazione.indice_invertito     import IndiceInvertito
 from Sorgente.Recupero.metadati                   import GestoreMetadati
 from Sorgente.Recupero.bm25                       import CalcolatoreRanking
 from Sorgente.Classificazione.classificatore_nli  import ClassificatoreNLI
+from Sorgente.Recupero.reranker import Reranker
 from Sorgente.Valutazione.metriche_ir             import MetricheIR
 from Sorgente.Valutazione.metriche_nlp            import MetricheNLP
 
@@ -31,6 +32,8 @@ class Pipeline:
         )
         print('  ✓ Metadati e ranking BM25 esteso')
         self._classificatore = ClassificatoreNLI(api_key)
+        self._reranker = Reranker() if cfg.RERANKING_ATTIVO else None
+        print('  ✓ Reranker neurale' if cfg.RERANKING_ATTIVO else '  - Reranker disabilitato')
         print('  ✓ Classificatore NLI')
         self._metriche_ir  = MetricheIR()
         self._metriche_nlp = MetricheNLP()
@@ -61,43 +64,58 @@ class Pipeline:
         return indice
 
     def verifica(
-        self,
-        claim:           str,
-        sentence_ids_map: dict | None = None
+            self,
+            claim: str,
+            sentence_ids_map: dict | None = None
     ) -> dict:
         token_query = self._espansore.espandi(claim)
+
         if cfg.SORGENTE_CORPUS == 'web':
-            risultati_bm25, corpus_runtime = self._recupera_da_web(claim)
-            corpus_da_usare = corpus_runtime
+            risultati_bm25, corpus_da_usare = self._recupera_da_web(claim)
         else:
-            risultati_bm25  = self._ranking.recupera_top_k(
-                claim, k=cfg.DOCUMENTI_DA_RECUPERARE
+            # Se reranking attivo recupera più candidati (es. 20)
+            # così il cross-encoder ha più documenti tra cui scegliere
+            n_candidati = cfg.CANDIDATI_RERANKING if cfg.RERANKING_ATTIVO else cfg.DOCUMENTI_DA_RECUPERARE
+            risultati_bm25 = self._ranking.recupera_top_k(
+                claim, k=n_candidati
             )
             corpus_da_usare = self._corpus
 
         if not risultati_bm25:
             return {
-                'claim':       claim,
-                'verdetto':    'NOT ENOUGH INFO',
-                'confidenza':  0.0,
-                'pesi_label':  {},
-                'documenti':   [],
+                'claim': claim,
+                'verdetto': 'NOT ENOUGH INFO',
+                'confidenza': 0.0,
+                'pesi_label': {},
+                'spiegazione': '',
+                'documenti': [],
                 'token_query': token_query
             }
+
+        # Re-ranking neurale — riordina i candidati BM25 semanticamente
+        # e taglia ai top-K finali da passare all'NLI
+        if self._reranker and cfg.RERANKING_ATTIVO:
+            risultati_bm25 = self._reranker.reordina(
+                claim=claim,
+                documenti=risultati_bm25,
+                corpus=corpus_da_usare,
+                top_k=cfg.DOCUMENTI_DA_RECUPERARE
+            )
+
         risultato_nli = self._classificatore.verifica(
-            claim             = claim,
-            risultati_bm25    = risultati_bm25,
-            corpus_arricchito = corpus_da_usare,
-            sentence_ids_map  = sentence_ids_map
+            claim=claim,
+            risultati_bm25=risultati_bm25,
+            corpus_arricchito=corpus_da_usare,
+            sentence_ids_map=sentence_ids_map
         )
 
         return {
-            'claim':       claim,
-            'verdetto':    risultato_nli['verdetto'],
-            'confidenza':  risultato_nli['confidenza'],
-            'pesi_label':  risultato_nli['pesi_label'],
-            'documenti':   risultato_nli['dettagli'],
+            'claim': claim,
+            'verdetto': risultato_nli['verdetto'],
+            'confidenza': risultato_nli['confidenza'],
+            'pesi_label': risultato_nli['pesi_label'],
             'spiegazione': risultato_nli.get('spiegazione', ''),
+            'documenti': risultato_nli['dettagli'],
             'token_query': token_query
         }
 
