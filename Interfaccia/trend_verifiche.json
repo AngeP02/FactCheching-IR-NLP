@@ -1,5 +1,17 @@
 [
   {
+    "claim": "Donald trump is married",
+    "verdetto": "SUPPORTS",
+    "confidenza": 59.6,
+    "data": "12/07/2026 23:09"
+  },
+  {
+    "claim": "Donald Trump is an actor?",
+    "verdetto": "REFUTES",
+    "confidenza": 57.7,
+    "data": "12/07/2026 22:43"
+  },
+  {
     "claim": "Barack obama was born in italy",
     "verdetto": "REFUTES",
     "confidenza": 100.0,

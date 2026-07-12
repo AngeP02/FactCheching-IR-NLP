@@ -135,45 +135,84 @@ class ClassificatoreNLI:
             self,
             verdetti: list[str],
             punteggi: list[float]
-    ) -> tuple[str, dict]:
+    ) -> tuple[str, dict, float]:
         """
-        Aggrega i verdetti con penalizzazione di NOT ENOUGH INFO.
+        Aggrega i verdetti combinando segnale semantico e consenso tra documenti.
 
-        NOT ENOUGH INFO è una label debole — significa solo che quel
-        documento non contiene l'informazione, non che la claim sia falsa.
-        SUPPORTS e REFUTES sono label forti — richiedono evidenza esplicita.
+        Strategia a due componenti:
 
-        Strategia:
-        - Prendi il punteggio massimo per SUPPORTS e REFUTES
-        - Penalizza NOT ENOUGH INFO moltiplicando per 0.5
-        - Vince la label con il punteggio massimo corretto
+        1. SCORE SEMANTICO (dal cross-encoder, già normalizzato [0,1] via sigmoide)
+           Per ogni label prende il punteggio massimo tra i documenti che l'hanno votata.
+           Il massimo è più robusto della media: un documento molto rilevante con score
+           alto è più informativo di tanti documenti mediocri.
+
+        2. CONSENSO (frazione di documenti che votano per la label vincente)
+           Misura quanto i documenti sono d'accordo tra loro.
+           Es: 4/5 documenti SUPPORTS → consenso 0.80
+
+        CONFIDENZA FINALE = score_semantico * 0.6 + consenso * 0.4
+           Il peso maggiore va allo score semantico perché viene dal cross-encoder,
+           che ha già valutato la coppia (claim, documento) — è il segnale più ricco.
+           Il consenso corregge i casi in cui un singolo documento ha score alto
+           ma tutti gli altri dicono il contrario.
+
+        NOT ENOUGH INFO viene penalizzata (×0.5) perché è una label debole:
+        significa solo che quel documento non contiene l'informazione,
+        non che la claim sia falsa o vera.
         """
         if not verdetti:
-            return LABEL_FALLBACK, {}
+            return LABEL_FALLBACK, {}, 0.0
 
-        pesi: dict[str, float] = {
-            'SUPPORTS': 0.0,
-            'REFUTES': 0.0,
-            'NOT ENOUGH INFO': 0.0
-        }
+        LABELS = ['SUPPORTS', 'REFUTES', 'NOT ENOUGH INFO']
 
-        # Punteggio massimo per ogni label
+        # 1. Score semantico massimo per ogni label
+        score_max: dict[str, float] = {l: 0.0 for l in LABELS}
+        conteggi:  dict[str, int]   = {l: 0   for l in LABELS}
+
         for verdetto, punteggio in zip(verdetti, punteggi):
-            if verdetto in pesi:
-                if punteggio > pesi[verdetto]:
-                    pesi[verdetto] = punteggio
+            if verdetto in score_max:
+                conteggi[verdetto] += 1
+                if punteggio > score_max[verdetto]:
+                    score_max[verdetto] = punteggio
 
-        # Penalizza NOT ENOUGH INFO — è una label debole
-        # Un documento che dice SUPPORTS con score 20 batte
-        # un documento che dice NOT ENOUGH INFO con score 24
-        pesi_corretti = {
-            'SUPPORTS': pesi['SUPPORTS'],
-            'REFUTES': pesi['REFUTES'],
-            'NOT ENOUGH INFO': pesi['NOT ENOUGH INFO'] * 0.5
+        # I punteggi passati sono già sigmoide*100 (range 0-100) se viene
+        # dal reranker, oppure punteggio_finale BM25 (range variabile) se no.
+        # Normalizziamo entrambi in [0,1] dividendo per il massimo osservato.
+        max_score_globale = max(score_max.values()) or 1.0
+        score_norm: dict[str, float] = {
+            l: score_max[l] / max_score_globale for l in LABELS
         }
 
-        verdetto_finale = max(pesi_corretti, key=lambda k: pesi_corretti[k])
-        return verdetto_finale, pesi
+        # 2. Consenso: frazione documenti per label
+        n_totale = len(verdetti)
+        consenso: dict[str, float] = {
+            l: conteggi[l] / n_totale for l in LABELS
+        }
+
+        # 3. Score combinato con penalità NEI
+        PENALITA_NEI = 0.5
+        PESO_SEMANTICO = 0.6
+        PESO_CONSENSO  = 0.4
+
+        score_combinato: dict[str, float] = {}
+        for l in LABELS:
+            s = score_norm[l] * PESO_SEMANTICO + consenso[l] * PESO_CONSENSO
+            if l == 'NOT ENOUGH INFO':
+                s *= PENALITA_NEI
+            score_combinato[l] = s
+
+        verdetto_finale = max(score_combinato, key=lambda k: score_combinato[k])
+
+        # Confidenza: score combinato del vincitore normalizzato sul totale
+        # Rappresenta quanto il verdetto domina rispetto alle alternative
+        totale_score = sum(score_combinato.values()) or 1.0
+        confidenza = round(score_combinato[verdetto_finale] / totale_score * 100, 1)
+
+        # pesi_label esposti verso l'esterno: score semantico grezzo per label
+        # (usato dalla UI per le barre di distribuzione)
+        pesi_esposti = {l: round(score_combinato[l], 4) for l in LABELS}
+
+        return verdetto_finale, pesi_esposti, confidenza
 
     def _genera_spiegazione(
             self,
@@ -276,10 +315,7 @@ class ClassificatoreNLI:
 
             dettagli.append(doc_dettaglio)
 
-        verdetto_finale, pesi = self._aggrega_verdetti(verdetti, punteggi)
-        peso_totale = sum(pesi.values())
-        confidenza = (pesi[verdetto_finale] / peso_totale * 100
-                      if peso_totale > 0 else 0.0)
+        verdetto_finale, pesi, confidenza = self._aggrega_verdetti(verdetti, punteggi)
 
         evidenze_testo = [d['evidenza'] for d in dettagli if d['evidenza']]
         spiegazione = self._genera_spiegazione(claim, verdetto_finale, evidenze_testo)
@@ -288,7 +324,7 @@ class ClassificatoreNLI:
             'claim': claim,
             'verdetto': verdetto_finale,
             'pesi_label': {k: round(v, 4) for k, v in pesi.items()},
-            'confidenza': round(confidenza, 1),
+            'confidenza': confidenza,
             'spiegazione': spiegazione,
             'dettagli': dettagli
         }
