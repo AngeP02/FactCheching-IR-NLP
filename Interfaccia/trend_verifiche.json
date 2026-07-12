@@ -1,0 +1,14 @@
+[
+  {
+    "claim": "Barack obama was born in italy",
+    "verdetto": "REFUTES",
+    "confidenza": 100.0,
+    "data": "12/07/2026 22:32"
+  },
+  {
+    "claim": "Barack obama was nor in italy",
+    "verdetto": "NOT ENOUGH INFO",
+    "confidenza": 100.0,
+    "data": "12/07/2026 22:31"
+  }
+]

@@ -4,7 +4,7 @@ insufficient to verify a CLAIM.
 
 You must respond with EXACTLY one of these three labels:
   SUPPORTS         - the evidence EXPLICITLY contains information that supports the claim
-  REFUTES          - the evidence EXPLICITLY contains information that contradicts the claim
+  REFUTES - the evidence contains information that CONTRADICTS or is INCONSISTENT WITH the claim (direct contradiction OR factual incompatibility)
   NOT ENOUGH INFO  - the evidence does not explicitly mention the information needed
 
 Rules:
@@ -31,18 +31,18 @@ class CostruttorePrompt:
 
     def costruisci(
         self,
-        claim:    str,
+        claim: str,
         evidenza: str
     ) -> tuple[str, str]:
         return self._prompt_sistema, self.costruisci_prompt_utente(claim, evidenza)
 
     def prepara_messaggi(
         self,
-        claim:    str,
+        claim: str,
         evidenza: str
     ) -> list[dict]:
 
         return [
             {'role': 'system', 'content': self._prompt_sistema},
-            {'role': 'user',   'content': self.costruisci_prompt_utente(claim, evidenza)}
+            {'role': 'user', 'content': self.costruisci_prompt_utente(claim, evidenza)}
         ]

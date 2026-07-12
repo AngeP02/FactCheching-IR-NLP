@@ -18,7 +18,7 @@ class GestoreMetadati:
             return 0.0
 
     def _normalizza_min_max(self, valori: np.ndarray) -> np.ndarray:
-        minimo  = valori.min()
+        minimo = valori.min()
         massimo = valori.max()
         if massimo == minimo:
             return np.full_like(valori, 0.5, dtype=float)

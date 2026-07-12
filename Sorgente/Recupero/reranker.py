@@ -79,8 +79,8 @@ class Reranker:
         alla prima esecuzione (~80MB) e messo in cache localmente.
         """
         print(f'  Caricamento cross-encoder: {self.NOME_MODELLO}...')
-        self._modello        = CrossEncoder(self.NOME_MODELLO)
-        self._max_caratteri  = 512   # limite token del modello
+        self._modello = CrossEncoder(self.NOME_MODELLO)
+        self._max_caratteri = 512   # limite token del modello
         print('  ✓ Cross-encoder caricato')
 
     # ── Metodi privati ────────────────────────────────────────────
@@ -103,7 +103,7 @@ class Reranker:
         Returns:
             Testo del documento troncato a _max_caratteri
         """
-        doc   = corpus.get(id_doc, {})
+        doc = corpus.get(id_doc, {})
         testo = doc.get('text', '') or ''
         return testo[:self._max_caratteri]
 
@@ -111,10 +111,10 @@ class Reranker:
 
     def reordina(
         self,
-        claim:     str,
+        claim: str,
         documenti: list[dict],
-        corpus:    dict,
-        top_k:     int = None
+        corpus: dict,
+        top_k: int = None
     ) -> list[dict]:
         """
         Riordina i documenti per rilevanza semantica rispetto alla claim.
@@ -172,8 +172,8 @@ class Reranker:
 
     def statistiche_reranking(
         self,
-        documenti_prima:  list[dict],
-        documenti_dopo:   list[dict]
+        documenti_prima: list[dict],
+        documenti_dopo: list[dict]
     ) -> dict:
         """
         Calcola le statistiche del re-ranking per il debug.
@@ -192,7 +192,7 @@ class Reranker:
             return {}
 
         ids_prima = [d['id_doc'] for d in documenti_prima]
-        ids_dopo  = [d['id_doc'] for d in documenti_dopo]
+        ids_dopo = [d['id_doc'] for d in documenti_dopo]
 
         # Quanti documenti hanno cambiato posizione?
         cambiamenti = sum(
@@ -207,9 +207,9 @@ class Reranker:
         )
 
         return {
-            'documenti_totali':   len(documenti_prima),
+            'documenti_totali': len(documenti_prima),
             'posizioni_cambiate': cambiamenti,
-            'top1_cambiato':      top1_cambiato,
-            'nuovo_top1':         ids_dopo[0] if ids_dopo else None,
-            'vecchio_top1':       ids_prima[0] if ids_prima else None
+            'top1_cambiato': top1_cambiato,
+            'nuovo_top1': ids_dopo[0] if ids_dopo else None,
+            'vecchio_top1': ids_prima[0] if ids_prima else None
         }

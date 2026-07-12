@@ -48,7 +48,7 @@ K1 = 1.5
 #    b=0 → nessuna normalizzazione
 #    b=1 → normalizzazione completa
 #    valore standard: 0.75
-B  = 0.75
+B = 0.75
 
 # ── Pesi ranking esteso ───────────────────────────────────────────
 # Peso del authority_score nel ranking BM25 esteso
@@ -98,25 +98,25 @@ MAX_CARATTERI_EVIDENZA = 3000
 # ── Label FEVER ───────────────────────────────────────────────────
 # Nomi esatti delle label nel dataset FEVER v1.0
 # Verificati nel notebook 00_studio_dataset
-LABEL_SUPPORTA      = 'SUPPORTS'
-LABEL_SMENTISCE     = 'REFUTES'
+LABEL_SUPPORTA = 'SUPPORTS'
+LABEL_SMENTISCE = 'REFUTES'
 LABEL_INSUFFICIENTE = 'NOT ENOUGH INFO'
-TUTTE_LE_LABEL      = [LABEL_SUPPORTA, LABEL_SMENTISCE, LABEL_INSUFFICIENTE]
+TUTTE_LE_LABEL = [LABEL_SUPPORTA, LABEL_SMENTISCE, LABEL_INSUFFICIENTE]
 
 # ── Dimensioni dataset (verificate nel notebook 00) ───────────────
-CLAIM_TOTALI_TRAIN  = 145_449
-CLAIM_TOTALI_DEV    = 19_033
-PAGINE_WIKI_CORPUS  = 14_364
+CLAIM_TOTALI_TRAIN = 145_449
+CLAIM_TOTALI_DEV = 19_033
+PAGINE_WIKI_CORPUS = 14_364
 
 # ── Split da usare ────────────────────────────────────────────────
 # Questi split vanno usati con disciplina:
 # - SPLIT_SVILUPPO:   durante lo sviluppo e il tuning
 # - SPLIT_VALUTAZIONE: per i risultati intermedi
 # - SPLIT_TEST_FINALE: UNA VOLTA SOLA per i risultati finali
-SPLIT_INDICE        = 'train'
-SPLIT_SVILUPPO      = 'campione_dev_bilanciato.csv'   # 1500 claim bilanciate
-SPLIT_VALUTAZIONE   = 'dev_per_claim.csv'             # ~19K claim
-SPLIT_TEST_FINALE   = 'paper_test'                    # NON usare durante lo sviluppo
+SPLIT_INDICE = 'train'
+SPLIT_SVILUPPO = 'campione_dev_bilanciato.csv'   # 1500 claim bilanciate
+SPLIT_VALUTAZIONE = 'dev_per_claim.csv'             # ~19K claim
+SPLIT_TEST_FINALE = 'paper_test'                    # NON usare durante lo sviluppo
 
 # ── Valutazione ───────────────────────────────────────────────────
 # Valori di K per le metriche P@K, R@K, F1@K
