@@ -63,8 +63,9 @@ class CalcolatoreRanking:
                 punteggi[id_doc] = punteggi.get(id_doc, 0.0) + contributo
         return punteggi
 
-    def recupera_top_k(self, query: str, k: int = cfg.DOCUMENTI_DA_RECUPERARE) -> list[dict]:
-        token_query = self._preprocessore.elabora(query)
+    def recupera_top_k(self, query: str, k: int = cfg.DOCUMENTI_DA_RECUPERARE, token_query: list[str] | None = None) -> list[dict]:
+        if token_query is None:
+            token_query = self._preprocessore.elabora(query)
         if not token_query:
             return []
         avgdl = self._indice.lunghezza_media_documenti()

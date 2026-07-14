@@ -56,3 +56,14 @@ class Preprocessore:
 
     def elabora_lista(self, testi: list[str]) -> list[list[str]]:
         return [self.elabora(testo) for testo in testi]
+
+    def elabora_senza_stemming(self, testo: str) -> list[str]:
+        if not testo or not testo.strip():
+            return []
+        testo = self.pulisci_annotazioni_fever(testo)
+        token = self.tokenizza(testo)
+        token = self.converti_minuscolo(token)
+        token = self.rimuovi_punteggiatura(token)
+        token = self.rimuovi_stopwords(token)
+        # stemming deliberatamente omesso
+        return token

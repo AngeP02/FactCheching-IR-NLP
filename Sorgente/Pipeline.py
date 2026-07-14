@@ -77,7 +77,7 @@ class Pipeline:
             # così il cross-encoder ha più documenti tra cui scegliere
             n_candidati = cfg.CANDIDATI_RERANKING if cfg.RERANKING_ATTIVO else cfg.DOCUMENTI_DA_RECUPERARE
             risultati_bm25 = self._ranking.recupera_top_k(
-                claim, k=n_candidati
+                claim, k=n_candidati, token_query=token_query  # ← passa i token espansi
             )
             corpus_da_usare = self._corpus
 
