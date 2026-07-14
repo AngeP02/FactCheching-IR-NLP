@@ -1,6 +1,5 @@
 import math
 import re
-
 from Sorgente.Indicizzazione.indice_invertito import IndiceInvertito
 from Sorgente.Preprocessing.preprocesing import Preprocessore
 from Sorgente.Recupero.metadati import GestoreMetadati
@@ -19,7 +18,6 @@ def pulisci_titolo(titolo: str) -> str:
     titolo = PATTERN_RSB.sub(']', titolo)
     titolo = titolo.replace('_', ' ').strip()
     return titolo
-
 
 class CalcolatoreRanking:
     def __init__(
@@ -87,25 +85,3 @@ class CalcolatoreRanking:
             })
         risultati.sort(key=lambda x: -x['punteggio_finale'])
         return risultati[:k]
-
-    def punteggio_singolo(self, query: str, id_doc: str) -> dict:
-        token_query = self._preprocessore.elabora(query)
-        avgdl = self._indice.lunghezza_media_documenti()
-        score_bm25 = 0.0
-        for termine in token_query:
-            tf = self._indice.frequenza_documento(termine, id_doc)
-            if tf > 0:
-                idf = self._calcola_idf(termine)
-                lung_doc = self._indice.lunghezza_documento(id_doc)
-                tf_norm = self._calcola_tf_normalizzata(tf, lung_doc, avgdl)
-                score_bm25 += idf * tf_norm
-        auth  = self._metadati.authority_score(id_doc)
-        fresh = self._metadati.freshness_score(id_doc)
-        return {
-            'id_doc': id_doc,
-            'titolo': pulisci_titolo(id_doc),
-            'punteggio_bm25': round(score_bm25, 4),
-            'authority_score': round(auth, 4),
-            'freshness_score': round(fresh, 4),
-            'punteggio_finale': round(score_bm25 + self._alpha * auth + self._beta * fresh, 4)
-        }

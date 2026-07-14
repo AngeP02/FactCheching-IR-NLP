@@ -31,7 +31,6 @@ class GestoreMetadati:
             dtype=float
         )
         link_logaritmici = np.log1p(link_grezzi)
-
         giorni_grezzi = np.array(
             [self._timestamp_in_giorni(corpus_arricchito[t]['timestamp'])
              for t in titoli],
@@ -48,27 +47,3 @@ class GestoreMetadati:
 
     def freshness_score(self, id_doc: str) -> float:
         return self._freshness_scores.get(id_doc, 0.0)
-
-    def punteggi_documento(self, id_doc: str) -> dict:
-        return {
-            'authority_score': self.authority_score(id_doc),
-            'freshness_score': self.freshness_score(id_doc)
-        }
-
-    def statistiche(self) -> dict:
-        auth = list(self._authority_scores.values())
-        fresh = list(self._freshness_scores.values())
-
-        return {
-            'authority': {
-                'min': round(min(auth), 4),
-                'max': round(max(auth), 4),
-                'media': round(sum(auth) / len(auth), 4),
-                'doc_con_authority_zero': sum(1 for v in auth if v == 0.0)
-            },
-            'freshness': {
-                'min': round(min(fresh), 4),
-                'max': round(max(fresh), 4),
-                'media': round(sum(fresh) / len(fresh), 4)
-            }
-        }

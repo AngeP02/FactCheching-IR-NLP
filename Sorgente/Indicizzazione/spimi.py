@@ -2,16 +2,13 @@ import os
 import pickle
 from collections import defaultdict
 from tqdm import tqdm
-
 from Sorgente.Preprocessing.preprocesing import Preprocessore
-
 
 class Spimi:
 
     def __init__(self, preprocessore: Preprocessore, dimensione_blocco: int = 500):
         self.preprocessore = preprocessore
         self.dimensione_blocco = dimensione_blocco
-
 
     def _costruisci_blocco(self, documenti_blocco: list[tuple[str, str]] ) -> tuple[dict, dict]:
         blocco = defaultdict(lambda: defaultdict(int))
@@ -46,7 +43,6 @@ class Spimi:
             lunghezze_totali.update(lunghezze)
         indice_ordinato = dict(sorted({t: dict(p) for t, p in indice_finale.items()}.items()))
         return indice_ordinato, lunghezze_totali
-
 
     def costruisci(self, documenti: list[tuple[str, str]], cartella_blocchi: str) -> tuple[dict, dict]:
         os.makedirs(cartella_blocchi, exist_ok=True)

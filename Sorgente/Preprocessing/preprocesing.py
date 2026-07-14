@@ -54,9 +54,6 @@ class Preprocessore:
         token = self.applica_stemming(token)
         return token
 
-    def elabora_lista(self, testi: list[str]) -> list[list[str]]:
-        return [self.elabora(testo) for testo in testi]
-
     def elabora_senza_stemming(self, testo: str) -> list[str]:
         if not testo or not testo.strip():
             return []
@@ -65,5 +62,4 @@ class Preprocessore:
         token = self.converti_minuscolo(token)
         token = self.rimuovi_punteggiatura(token)
         token = self.rimuovi_stopwords(token)
-        # stemming deliberatamente omesso
         return token
