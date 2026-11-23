@@ -22,13 +22,21 @@ Claim → Preprocessing → Espansione query (WordNet) → BM25 esteso → Re-ra
 È composto da due moduli indipendenti eseguiti in sequenza:
 
 1. **Modulo IR — Recupero delle evidenze** con le fasi di:
+   
    1.1 **Preprocessing** — pulizia annotazioni FEVER, tokenizzazione NLTK, lowercase, rimozione punteggiatura e stopwords, stemming (Porter);
+   
    1.2 **Espansione della query** — aggiunta di sinonimi WordNet (primo synset, opzionale);
+   
    1.3 **BM25 esteso** — ranking con IDF smoothing Robertson, saturazione TF, penalizzazione lunghezza, authority score e freshness score;
+   
    1.4 **Re-ranking** (opzionale) — cross-encoder transformer su coppie (claim, documento).
-2. **Modulo NLI — Classificazione** con le fasi di:
+   
+3. **Modulo NLI — Classificazione** con le fasi di:
+
    2.1 **Classificazione NLI** — GPT-4o-mini zero-shot con in-context learning;
+   
    2.2 **Aggregazione** — combina score massimo del documento più rilevante per label e proporzione di consenso;
+   
    2.3 **Spiegazione** — seconda chiamata GPT-4o-mini.
 
 ## Interfaccia
